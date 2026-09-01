@@ -532,12 +532,14 @@ class Luxtronik2 extends utils.Adapter {
                 return new SectionHandler(id, item, this);
             }
         }
-        if ('option' in item) {
+        if ('option' in item && 'raw' in item) {
             return new SelectHandler(id, item, this);
         }
-        if ('min' in item) {
+        if ('min' in item && 'max' in item && 'div' in item && 'raw' in item) {
             return new NumberHandler(id, item, this);
         }
+        // some firmware versions send partial items (e.g. "Abschaltung VD" in
+        // "Ablaufzeiten" has a "min" but no "raw"/"value"): fall back to read-only
         return new ReadOnlyHandler(id, item, this);
     }
     async setStateValueAsync(id, value) {
@@ -698,8 +700,13 @@ class SelectHandler extends ItemHandler {
         this.adapter.subscribeStates(this.id);
     }
     async setStateAsync() {
-        const value = parseInt(this.item.raw[0]);
-        await this.adapter.setStateValueAsync(this.id, value);
+        var _a;
+        const raw = (_a = this.item.raw) === null || _a === void 0 ? void 0 : _a[0];
+        if (raw === undefined) {
+            await this.adapter.setStateValueAsync(this.id, null);
+            return;
+        }
+        await this.adapter.setStateValueAsync(this.id, parseInt(raw));
     }
     createSetCommand(value) {
         return `SET;set_${this.item.$.id};${value}`;
@@ -707,7 +714,8 @@ class SelectHandler extends ItemHandler {
 }
 class NumberHandler extends ItemHandler {
     async extendObjectAsync() {
-        const unit = this.item.unit[0].trim();
+        var _a, _b, _c;
+        const unit = (_c = (_b = (_a = this.item.unit) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.trim()) !== null && _c !== void 0 ? _c : '';
         const min = parseInt(this.item.min[0]);
         const max = parseInt(this.item.max[0]);
         const div = parseInt(this.item.div[0]);

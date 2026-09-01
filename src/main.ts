@@ -572,14 +572,16 @@ class Luxtronik2 extends utils.Adapter {
             }
         }
 
-        if ('option' in item) {
+        if ('option' in item && 'raw' in item) {
             return new SelectHandler(id, item, this);
         }
 
-        if ('min' in item) {
+        if ('min' in item && 'max' in item && 'div' in item && 'raw' in item) {
             return new NumberHandler(id, item, this);
         }
 
+        // some firmware versions send partial items (e.g. "Abschaltung VD" in
+        // "Ablaufzeiten" has a "min" but no "raw"/"value"): fall back to read-only
         return new ReadOnlyHandler(id, item, this);
     }
 
@@ -751,8 +753,12 @@ class SelectHandler extends ItemHandler<SelectContentItem> {
     }
 
     async setStateAsync(): Promise<void> {
-        const value = parseInt(this.item.raw[0]);
-        await this.adapter.setStateValueAsync(this.id, value);
+        const raw = this.item.raw?.[0];
+        if (raw === undefined) {
+            await this.adapter.setStateValueAsync(this.id, null);
+            return;
+        }
+        await this.adapter.setStateValueAsync(this.id, parseInt(raw));
     }
 
     createSetCommand(value: string | number): string {
@@ -762,7 +768,7 @@ class SelectHandler extends ItemHandler<SelectContentItem> {
 
 class NumberHandler extends ItemHandler<NumberContentItem> {
     async extendObjectAsync(): Promise<void> {
-        const unit = this.item.unit[0].trim();
+        const unit = this.item.unit?.[0]?.trim() ?? '';
         const min = parseInt(this.item.min[0]);
         const max = parseInt(this.item.max[0]);
         const div = parseInt(this.item.div[0]);
