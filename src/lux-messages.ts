@@ -36,8 +36,8 @@ export interface ReadOnlyContentItem extends ItemBase {
 
 export interface SelectContentItem extends ItemBase {
     option: SelectOption[];
-    raw: [string];
-    value: [string];
+    raw?: [string];
+    value?: [string];
 }
 
 export interface SelectOption {
@@ -48,9 +48,9 @@ export interface SelectOption {
 export interface NumberContentItem extends ItemBase {
     min: [string];
     max: [string];
-    step: [string];
-    unit: [string];
+    step?: [string];
+    unit?: [string];
     div: [string];
     raw: [string];
-    value: [string];
+    value?: [string];
 }
