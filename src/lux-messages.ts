@@ -30,7 +30,7 @@ export interface ContentSection extends ItemBase {
 export type ContentItem = ReadOnlyContentItem | SelectContentItem | NumberContentItem;
 
 export interface ReadOnlyContentItem extends ItemBase {
-    value: [string];
+    value?: [string];
     raw?: [string];
 }
 

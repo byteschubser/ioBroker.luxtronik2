@@ -1,7 +1,11 @@
 "use strict";
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
-    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
 }) : (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     o[k2] = m[k];
@@ -605,7 +609,7 @@ class TimeLogSectionHandler extends SectionHandler {
         });
     }
     async setStateAsync() {
-        const value = this.item.item.reduce((old, item) => ({ ...old, [item.name[0]]: item.value[0] }), {});
+        const value = this.item.item.reduce((old, item) => { var _a, _b; return ({ ...old, [item.name[0]]: (_b = (_a = item.value) === null || _a === void 0 ? void 0 : _a[0]) !== null && _b !== void 0 ? _b : '' }); }, {});
         await this.adapter.setStateValueAsync(this.id, JSON.stringify(value));
     }
 }
@@ -615,13 +619,14 @@ class ReadOnlyHandler extends ItemHandler {
         this.numberUnitMatch = /^(-?\d+(\.\d+)?|-+) ?(\D*)$/;
     }
     async extendObjectAsync() {
+        var _a;
         const common = {
             name: this.item.name[0],
             read: true,
             write: false,
         };
-        const value = this.item.value[0];
-        const match = value.match(this.numberUnitMatch);
+        const value = (_a = this.item.value) === null || _a === void 0 ? void 0 : _a[0];
+        const match = value === null || value === void 0 ? void 0 : value.match(this.numberUnitMatch);
         if (match) {
             common.type = 'number';
             if (match[3]) {
@@ -644,7 +649,13 @@ class ReadOnlyHandler extends ItemHandler {
         });
     }
     async setStateAsync() {
-        const value = this.item.value[0];
+        var _a;
+        const value = (_a = this.item.value) === null || _a === void 0 ? void 0 : _a[0];
+        if (value === undefined) {
+            // some firmware versions send items without a value (e.g. in "Ablaufzeiten")
+            await this.adapter.setStateValueAsync(this.id, null);
+            return;
+        }
         const match = value.match(this.numberUnitMatch);
         if (match) {
             const numberValue = match[1];
