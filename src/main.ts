@@ -665,7 +665,7 @@ class TimeLogSectionHandler extends SectionHandler {
 
     async setStateAsync(): Promise<void> {
         const value = this.item.item.reduce<Record<string, string>>(
-            (old, item) => ({ ...old, [item.name[0]]: item.value[0] }),
+            (old, item) => ({ ...old, [item.name[0]]: item.value?.[0] ?? '' }),
             {},
         );
         await this.adapter.setStateValueAsync(this.id, JSON.stringify(value));
@@ -680,8 +680,8 @@ class ReadOnlyHandler extends ItemHandler<ReadOnlyContentItem> {
             read: true,
             write: false,
         };
-        const value = this.item.value[0];
-        const match = value.match(this.numberUnitMatch);
+        const value = this.item.value?.[0];
+        const match = value?.match(this.numberUnitMatch);
         if (match) {
             common.type = 'number';
             if (match[3]) {
@@ -703,7 +703,12 @@ class ReadOnlyHandler extends ItemHandler<ReadOnlyContentItem> {
     }
 
     async setStateAsync(): Promise<void> {
-        const value = this.item.value[0];
+        const value = this.item.value?.[0];
+        if (value === undefined) {
+            // some firmware versions send items without a value (e.g. in "Ablaufzeiten")
+            await this.adapter.setStateValueAsync(this.id, null);
+            return;
+        }
         const match = value.match(this.numberUnitMatch);
         if (match) {
             const numberValue = match[1];
