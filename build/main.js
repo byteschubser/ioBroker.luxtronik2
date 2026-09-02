@@ -385,7 +385,7 @@ class Luxtronik2 extends utils.Adapter {
         });
     }
     async handleWsMessageAsync(msg) {
-        var _a, _b, _c, _d, _e;
+        var _a, _b;
         const message = await (0, xml2js_1.parseStringPromise)(msg);
         this.log.debug(JSON.stringify(message));
         if ('Navigation' in message) {
@@ -435,51 +435,77 @@ class Luxtronik2 extends utils.Adapter {
                     await sectionHandler.setStateAsync();
                     continue;
                 }
-                const itemIds = [];
-                for (let j = 0; j < section.item.length; j++) {
-                    const item = section.item[j];
-                    try {
-                        const itemHandler = this.createHandler(item, sectionHandler.id, itemIds);
-                        if (!itemHandler) {
-                            continue;
-                        }
-                        if (!this.handlers[itemHandler.id]) {
-                            this.log.silly(`Creating ${itemHandler.id}`);
-                            await itemHandler.extendObjectAsync();
-                            this.handlers[itemHandler.id] = itemHandler;
-                        }
-                        if (this.requestedUpdates.length === 0) {
-                            this.log.silly(`Setting state of ${itemHandler.id}`);
-                            await itemHandler.setStateAsync();
-                        }
-                        else {
-                            const updateIndex = this.requestedUpdates.findIndex((ch) => ch.id === itemHandler.id);
-                            if (updateIndex >= 0) {
-                                const cmd = itemHandler.createSetCommand(this.requestedUpdates[updateIndex].value);
-                                this.log.debug(`Sending ${cmd}`);
-                                (_a = this.getSentry()) === null || _a === void 0 ? void 0 : _a.addBreadcrumb({ type: 'http', category: 'ws', data: { url: cmd } });
-                                (_b = this.webSocket) === null || _b === void 0 ? void 0 : _b.send(cmd);
-                                this.requestedUpdates.splice(updateIndex);
-                                shouldSave = true;
-                            }
-                        }
-                    }
-                    catch (error) {
-                        this.log.error(`Couldn't handle '${sectionHandler.id}' -> '${item.name[0]}': ${error}`);
-                        (_c = this.getSentry()) === null || _c === void 0 ? void 0 : _c.captureException(error, { extra: { section: sectionHandler.id, item } });
-                    }
+                if (await this.handleContentItems(section.item, sectionHandler.id)) {
+                    shouldSave = true;
                 }
             }
             if (shouldSave) {
                 this.log.debug('Saving');
-                (_d = this.getSentry()) === null || _d === void 0 ? void 0 : _d.addBreadcrumb({ type: 'http', category: 'ws', data: { url: 'SAVE;1' } });
-                (_e = this.webSocket) === null || _e === void 0 ? void 0 : _e.send('SAVE;1');
+                (_a = this.getSentry()) === null || _a === void 0 ? void 0 : _a.addBreadcrumb({ type: 'http', category: 'ws', data: { url: 'SAVE;1' } });
+                (_b = this.webSocket) === null || _b === void 0 ? void 0 : _b.send('SAVE;1');
                 this.isSaving = true;
             }
             else {
                 this.requestNextContent();
             }
         }
+    }
+    /**
+     * Creates/updates the states for a list of content items. Nested sub-sections
+     * (e.g. "Energiemonitor" -> "Wärmemenge" -> "Heizung" in newer firmware) are
+     * processed recursively instead of being treated as a leaf value.
+     * Returns true if a SAVE command needs to be sent afterwards.
+     */
+    async handleContentItems(items, parentId) {
+        var _a, _b, _c;
+        let shouldSave = false;
+        const existingIds = [];
+        for (const item of items) {
+            try {
+                const handler = this.createHandler(item, parentId, existingIds);
+                if (!handler) {
+                    continue;
+                }
+                if (!this.handlers[handler.id]) {
+                    this.log.silly(`Creating ${handler.id}`);
+                    await handler.extendObjectAsync();
+                    this.handlers[handler.id] = handler;
+                }
+                if (handler instanceof TimeLogSectionHandler) {
+                    // time log sub-sections are actually states
+                    await handler.setStateAsync();
+                    continue;
+                }
+                if (handler instanceof SectionHandler) {
+                    // nested sub-section: recurse into its children
+                    const children = 'item' in item ? item.item : [];
+                    if (await this.handleContentItems(children, handler.id)) {
+                        shouldSave = true;
+                    }
+                    continue;
+                }
+                if (this.requestedUpdates.length === 0) {
+                    this.log.silly(`Setting state of ${handler.id}`);
+                    await handler.setStateAsync();
+                }
+                else {
+                    const updateIndex = this.requestedUpdates.findIndex((ch) => ch.id === handler.id);
+                    if (updateIndex >= 0) {
+                        const cmd = handler.createSetCommand(this.requestedUpdates[updateIndex].value);
+                        this.log.debug(`Sending ${cmd}`);
+                        (_a = this.getSentry()) === null || _a === void 0 ? void 0 : _a.addBreadcrumb({ type: 'http', category: 'ws', data: { url: cmd } });
+                        (_b = this.webSocket) === null || _b === void 0 ? void 0 : _b.send(cmd);
+                        this.requestedUpdates.splice(updateIndex);
+                        shouldSave = true;
+                    }
+                }
+            }
+            catch (error) {
+                this.log.error(`Couldn't handle '${parentId}' -> '${item.name[0]}': ${error}`);
+                (_c = this.getSentry()) === null || _c === void 0 ? void 0 : _c.captureException(error, { extra: { section: parentId, item } });
+            }
+        }
+        return shouldSave;
     }
     requestAllContent() {
         this.wsFailCounter = 0;
